@@ -11,6 +11,7 @@ import { MempoolLoop } from "./core/types/arbitrageloops/mempoolLoop";
 import { SkipLoop } from "./core/types/arbitrageloops/skipLoop";
 import { setBotConfig } from "./core/types/base/botConfig";
 import { LogType } from "./core/types/base/logging";
+import { setPathFees } from "./core/types/base/path";
 import { removedUnusedPools } from "./core/types/base/pool";
 // load env files
 dotenv.config();
@@ -68,7 +69,7 @@ Connections Details:\n
 
 	const allPools = await initPools(botClients, botConfig.poolEnvs, botConfig.mappingFactoryRouter);
 	const graph = newGraph(allPools);
-	const paths = getPaths(graph, botConfig.offerAssetInfo, botConfig.maxPathPools) ?? [];
+	const paths = getPaths(graph, botConfig, botConfig.maxPathPools) ?? [];
 
 	const filteredPools = removedUnusedPools(allPools, paths);
 	setupMessage += `**\nDerived Paths for Arbitrage:
@@ -81,6 +82,7 @@ Total Paths:** \t${paths.length}\n`;
 	setupMessage += `(Removed ${allPools.length - filteredPools.length} unused pools)\n`;
 	setupMessage += "---".repeat(30);
 
+	setPathFees(paths, botConfig);
 	startupMessage += setupMessage;
 	await logger.sendMessage(startupMessage, LogType.Console);
 

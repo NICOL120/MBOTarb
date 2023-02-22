@@ -1,4 +1,5 @@
-import { AssetInfo, isNativeAsset } from "../types/base/asset";
+import { isNativeAsset } from "../types/base/asset";
+import { BotConfig } from "../types/base/botConfig";
 import { Path } from "../types/base/path";
 import { Pool } from "../types/base/pool";
 
@@ -59,10 +60,8 @@ function getVertex(graph: Graph, name: string): Vertex {
 /**
  *
  */
-export function getPaths(graph: Graph, startingAsset: AssetInfo, depth: number): Array<Path> | undefined {
-	const startingAssetName = isNativeAsset(startingAsset)
-		? startingAsset.native_token.denom
-		: startingAsset.token.contract_addr;
+export function getPaths(graph: Graph, botConfig: BotConfig, depth: number): Array<Path> | undefined {
+	const startingAssetName = botConfig.offerAssetInfo.native_token.denom;
 	const root = graph.vertices.get(startingAssetName);
 	if (!root) {
 		console.log("graph does not contain starting asset");
@@ -91,6 +90,8 @@ export function getPaths(graph: Graph, startingAsset: AssetInfo, depth: number):
 		paths.push({
 			pools: poolList,
 			cooldown: false,
+			txFee: Array.from(botConfig.txFees.values())[0], //will be overwritten later
+			profitThreshold: Array.from(botConfig.profitThresholds.values())[0], //will be overwritten later
 		});
 	}
 	return paths;

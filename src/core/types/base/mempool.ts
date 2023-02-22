@@ -143,7 +143,8 @@ export function processMempool(mempool: Mempool): Array<MempoolTrade> {
 						}
 					} catch (e) {
 						console.log("cannot apply send message");
-						console.log(fromAscii(fromBase64(containedMsg.send.msg)));
+						console.log(containedMsg.send);
+						continue;
 					}
 				} else if (isTFMSwapOperationsMessage(containedMsg)) {
 					const offerAsset = {

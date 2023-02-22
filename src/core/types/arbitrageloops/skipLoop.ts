@@ -126,22 +126,13 @@ export class SkipLoop extends MempoolLoop {
 			sequence: this.sequence,
 			chainId: this.chainid,
 		};
-		const [msgs, nrOfWasms] = this.messageFunction(
-			arbTrade,
-			this.account.address,
-			this.botConfig.flashloanRouterAddress,
-		);
+		const [msgs, _] = this.messageFunction(arbTrade, this.account.address, this.botConfig.flashloanRouterAddress);
 		msgs.push(bidMsgEncodedObject);
-
-		//if gas fee cannot be found in the botconfig based on pathlengths, pick highest available
-		const TX_FEE =
-			this.botConfig.txFees.get(nrOfWasms) ??
-			Array.from(this.botConfig.txFees.values())[this.botConfig.txFees.size - 1];
 
 		const txRaw: TxRaw = await this.botClients.SigningCWClient.sign(
 			this.account.address,
 			msgs,
-			TX_FEE,
+			arbTrade.path.txFee,
 			"",
 			signerData,
 		);

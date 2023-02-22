@@ -1,137 +1,36 @@
-import { AssetInfo } from "../../types/base/asset";
+import { Asset, AssetInfo } from "../../types/base/asset";
+import { BotConfig } from "../../types/base/botConfig";
 import { Path } from "../../types/base/path";
 import { getAssetsOrder, outGivenIn } from "../../types/base/pool";
 import { OptimalTrade } from "../arbitrage";
-
-// function to get the optimal tradsize and profit for a single path.
-// it assumes the token1 from pool1 is the same asset as token1 from pool2 and
-// token2 from pool1 equals the asset from token2 from pool2. e.g. A->B (pool1) then B->A (pool2).
-/**
- *@deprecated Prefer cyclical method in getTradeForPath. This function is used for debugging and comparing both.
- */
-function getTradesizeAndProfitForPath(path: Path, offerAssetInfo: AssetInfo): [number, number] {
-	// input token from the first pool equals out token from second pool
-
-	let in0: number;
-	let out0: number;
-
-	let in1: number;
-	let out1: number;
-	if (path.pools.length == 2) {
-		const [inAsset0, outAsset0] = getAssetsOrder(path.pools[0], offerAssetInfo) ?? [];
-		const [inAsset1, outAsset1] = getAssetsOrder(path.pools[1], outAsset0.info) ?? [];
-
-		const in0 = +inAsset0.amount;
-		const out0 = +outAsset0.amount;
-		const in1 = +inAsset1.amount;
-		const out1 = +outAsset1.amount;
-
-		const pool0fee = Math.max(path.pools[0].outputfee, path.pools[0].inputfee) / 100;
-		const pool1fee = Math.max(path.pools[1].outputfee, path.pools[1].inputfee) / 100;
-		const x1 =
-			(in0 * in1 - Math.sqrt(((pool0fee - 1) * pool1fee - pool0fee + 1) * in0 * in1 * out1 * out0)) /
-			((pool0fee - 1) * out0 - in1);
-		const x2 =
-			(in0 * in1 + Math.sqrt(((pool0fee - 1) * pool1fee - pool0fee + 1) * in0 * in1 * out1 * out0)) /
-			((pool0fee - 1) * out0 - in1);
-		const x = Math.min(Math.floor(Math.max(x1, x2)), 1000000000);
-		let currentOfferAsset = { amount: String(x), info: offerAssetInfo };
-		for (let i = 0; i < path.pools.length; i++) {
-			const [outAmount, outInfo] = outGivenIn(path.pools[i], currentOfferAsset);
-			currentOfferAsset = { amount: String(outAmount), info: outInfo };
-		}
-		const profit = +currentOfferAsset.amount - x;
-
-		return [x, Math.round(profit)];
-	} else if (path.pools.length == 3) {
-		const [inAsset0, outAsset0] = getAssetsOrder(path.pools[0], offerAssetInfo) ?? [];
-		const [inAsset1, outAsset1] = getAssetsOrder(path.pools[1], outAsset0.info) ?? [];
-		const [inAsset2, outAsset2] = getAssetsOrder(path.pools[2], outAsset1.info) ?? [];
-
-		const in0 = +inAsset0.amount;
-		const out0 = +outAsset0.amount;
-		const in1 = +inAsset1.amount;
-		const out1 = +outAsset1.amount;
-		const in2 = +inAsset2.amount;
-		const out2 = +outAsset2.amount;
-
-		const pool0fee = Math.max(path.pools[0].outputfee, path.pools[0].inputfee) / 100;
-		const pool1fee = Math.max(path.pools[1].outputfee, path.pools[1].inputfee) / 100;
-		const pool2fee = Math.max(path.pools[2].outputfee, path.pools[2].inputfee) / 100;
-		const x1 =
-			-(
-				in0 * in1 * in2 +
-				Math.sqrt(
-					-in0 * in1 * in2 * out0 * out1 * out2 * pool0fee +
-						in0 * in1 * in2 * out0 * out1 * out2 +
-						(in0 * in1 * in2 * out0 * out1 * out2 * pool0fee - in0 * in1 * in2 * out0 * out1 * out2) *
-							pool1fee +
-						(in0 * in1 * in2 * out0 * out1 * out2 * pool0fee -
-							in0 * in1 * in2 * out0 * out1 * out2 -
-							(in0 * in1 * in2 * out0 * out1 * out2 * pool0fee - in0 * in1 * in2 * out0 * out1 * out2) *
-								pool1fee) *
-							pool2fee,
-				)
-			) /
-			(in1 * in2 +
-				in2 * out0 +
-				out0 * out1 -
-				(in2 * out0 + out0 * out1) * pool0fee +
-				(out0 * out1 * pool0fee - out0 * out1) * pool1fee);
-		const x2 =
-			-(
-				in0 * in1 * in2 -
-				Math.sqrt(
-					-in0 * in1 * in2 * out0 * out1 * out2 * pool0fee +
-						in0 * in1 * in2 * out0 * out1 * out2 +
-						(in0 * in1 * in2 * out0 * out1 * out2 * pool0fee - in0 * in1 * in2 * out0 * out1 * out2) *
-							pool1fee +
-						(in0 * in1 * in2 * out0 * out1 * out2 * pool0fee -
-							in0 * in1 * in2 * out0 * out1 * out2 -
-							(in0 * in1 * in2 * out0 * out1 * out2 * pool0fee - in0 * in1 * in2 * out0 * out1 * out2) *
-								pool1fee) *
-							pool2fee,
-				)
-			) /
-			(in1 * in2 +
-				in2 * out0 +
-				out0 * out1 -
-				(in2 * out0 + out0 * out1) * pool0fee +
-				(out0 * out1 * pool0fee - out0 * out1) * pool1fee);
-		const x = Math.min(Math.floor(Math.max(x1, x2)), 1000000000);
-		let currentOfferAsset = { amount: String(x), info: offerAssetInfo };
-		for (let i = 0; i < path.pools.length; i++) {
-			const [outAmount, outInfo] = outGivenIn(path.pools[i], currentOfferAsset);
-			currentOfferAsset = { amount: String(outAmount), info: outInfo };
-		}
-		const profit = +currentOfferAsset.amount - x;
-		return [x, Math.round(profit)];
-	} else {
-		return [-1, -1];
-	}
-}
 
 /** Function to calculate the optimal path, tradesize and profit given an Array of paths and a starting asset.
  * @param paths Type `Array<Path>` to check for arbitrage.
  * @param offerAssetInfo Type `AssetInfo` to start the arbitrage from.
  */
-export function getOptimalTrade(paths: Array<Path>, offerAssetInfo: AssetInfo): OptimalTrade | undefined {
+export function getOptimalTrade(paths: Array<Path>, botConfig: BotConfig): OptimalTrade | undefined {
 	let maxTradesize = 0;
-	let maxProfit = 0;
+	let maxActualProfit = 0;
+	let maxRawProfit = 0;
 	let maxPath;
 
 	paths.map((path: Path) => {
 		if (!path.cooldown) {
-			const [tradesize, profit] = getOptimalTradeForPath(path, offerAssetInfo);
-			if (profit > maxProfit && tradesize > 0) {
-				maxProfit = profit;
+			const [tradesize, rawProfit, actualProfit] = getOptimalTradeForPath(path, botConfig);
+			if (actualProfit > maxActualProfit && tradesize > 0) {
+				maxActualProfit = actualProfit;
+				maxRawProfit = rawProfit;
 				maxTradesize = tradesize;
 				maxPath = path;
 			}
 		}
 	});
 	if (maxPath) {
-		return { path: maxPath, offerAsset: { amount: String(maxTradesize), info: offerAssetInfo }, profit: maxProfit };
+		return {
+			path: maxPath,
+			offerAsset: { amount: String(maxTradesize), info: botConfig.offerAssetInfo },
+			profit: maxRawProfit,
+		};
 	} else {
 		return undefined;
 	}
@@ -144,13 +43,15 @@ export function getOptimalTrade(paths: Array<Path>, offerAssetInfo: AssetInfo): 
 	@param offerAssetInfo OfferAsset type `AssetInfo` from which the arbitrage path starts. 
     @returns [optimal tradesize, expected profit] for this particular path.
  */
-export function getOptimalTradeForPath(path: Path, offerAssetInfo: AssetInfo): [number, number] {
+export function getOptimalTradeForPath(path: Path, botConfig: BotConfig): [number, number, number] {
 	const assetBalances = [];
-	let offerAssetNext = offerAssetInfo;
+	let offerAssetNext: AssetInfo = botConfig.offerAssetInfo;
 	for (let i = 0; i < path.pools.length; i++) {
-		const [inAsset, outAsset] = getAssetsOrder(path.pools[i], offerAssetNext) ?? [];
-		offerAssetNext = outAsset.info;
-		assetBalances.push([+inAsset.amount, +outAsset.amount]);
+		const assets = getAssetsOrder(path.pools[i], offerAssetNext);
+		if (assets) {
+			offerAssetNext = assets[1].info;
+			assetBalances.push([+assets[0].amount, +assets[1].amount]);
+		}
 	}
 
 	// # Set the aprime_in and aprime_out to the first pool in the route
@@ -173,13 +74,22 @@ export function getOptimalTradeForPath(path: Path, offerAssetInfo: AssetInfo): [
 	// # Calculate the delta_a
 	const delta_a = Math.floor((Math.sqrt(r1_first * r2_first * aprime_in * aprime_out) - aprime_in) / r1_first);
 
-	let currentOfferAsset = { amount: String(delta_a), info: offerAssetInfo };
+	let currentOfferAsset: Asset = { amount: String(delta_a), info: botConfig.offerAssetInfo };
 	for (let i = 0; i < path.pools.length; i++) {
 		const [outAmount, outInfo] = outGivenIn(path.pools[i], currentOfferAsset);
 		currentOfferAsset = { amount: String(outAmount), info: outInfo };
 	}
-	const profit = +currentOfferAsset.amount - delta_a;
+	const rawProfit = +currentOfferAsset.amount - delta_a;
+	let actualProfit;
+	if (botConfig.skipConfig) {
+		const skipBidRate = botConfig.skipConfig.skipBidRate;
+		//Rawprofit - skipbid*Rawprofit - flashloanfee*tradesize - profitThreshold(including fees)
+		actualProfit =
+			rawProfit - (1 - skipBidRate) * rawProfit - (botConfig.flashloanFee / 100) * delta_a - path.profitThreshold;
+	} else {
+		actualProfit = rawProfit - (botConfig.flashloanFee / 100) * delta_a - path.profitThreshold;
+	}
 
-	// # Return the floor of delta_a
-	return [delta_a, profit];
+	// # Return the floor of delta_a and the actual profit excluding a potential skip bid, this bid will be recalculated later
+	return [delta_a, Math.floor(rawProfit), Math.floor(actualProfit)];
 }

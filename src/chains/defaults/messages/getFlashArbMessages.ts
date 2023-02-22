@@ -9,7 +9,7 @@ import { AmmDexName, outGivenIn, Pool } from "../../../core/types/base/pool";
 import { IncreaseAllowanceMessage } from "../../../core/types/messages/allowance";
 import { FlashLoanMessage, WasmMessage } from "../../../core/types/messages/flashloanmessage";
 import { SendMessage } from "../../../core/types/messages/sendmessages";
-import { InnerSwapMessage, JunoSwapMessage, DefaultSwapMessage } from "../../../core/types/messages/swapmessages";
+import { DefaultSwapMessage, InnerSwapMessage, JunoSwapMessage } from "../../../core/types/messages/swapmessages";
 /**
  *
  */
@@ -35,7 +35,7 @@ export function getFlashArbMessages(
 /**
  *
  */
-function getFlashArbMessage(path: Path, offerAsset0: Asset): FlashLoanMessage {
+export function getFlashArbMessage(path: Path, offerAsset0: Asset): FlashLoanMessage {
 	const wasmMsgs = [];
 	let offerAsset = offerAsset0;
 	for (const pool of path.pools) {

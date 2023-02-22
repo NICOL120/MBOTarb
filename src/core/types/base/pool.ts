@@ -77,6 +77,9 @@ function applyTradeOnPool(pool: Pool, offer_asset: Asset) {
 	// K defines the constant product equilibrium
 	const k = +pool.assets[0].amount * +pool.assets[1].amount;
 	const [asset_in, asset_out] = getAssetsOrder(pool, offer_asset.info) ?? [];
+	if (!asset_in || !asset_out) {
+		return;
+	}
 	const a_in = +asset_in.amount;
 	const a_out = +asset_out.amount;
 
@@ -158,6 +161,9 @@ export function applyMempoolTradesOnPools(pools: Array<Pool>, mempoolTrades: Arr
 
 					// Second swap
 					const [outGivenIn0, nextOfferAssetInfo] = outGivenIn(poolToUpdate, offerAsset);
+					if (!outGivenIn0 || !nextOfferAssetInfo) {
+						continue;
+					}
 					const secondPoolToUpdate = pools.find(
 						(pool) => pool.address === msg.pass_through_swap.output_amm_address,
 					);
@@ -255,14 +261,10 @@ function findPoolByInfos(pools: Array<Pool>, infoA: AssetInfo, infoB: AssetInfo)
 /**
  *
  */
-export function getAssetsOrder(pool: Pool, assetInfo: AssetInfo) {
+export function getAssetsOrder(pool: Pool, assetInfo: AssetInfo): [Asset, Asset] {
 	if (isMatchingAssetInfos(pool.assets[0].info, assetInfo)) {
-		return [pool.assets[0], pool.assets[1]] as Array<Asset>;
-	} else if (isMatchingAssetInfos(pool.assets[1].info, assetInfo)) {
-		return [pool.assets[1], pool.assets[0]] as Array<Asset>;
-	} else {
-		return undefined;
-	}
+		return [pool.assets[0], pool.assets[1]];
+	} else return [pool.assets[1], pool.assets[0]];
 }
 
 /**
