@@ -92,6 +92,7 @@ export function getPaths(graph: Graph, botConfig: BotConfig, depth: number): Arr
 			cooldown: false,
 			txFee: Array.from(botConfig.txFees.values())[0], //will be overwritten later
 			profitThreshold: Array.from(botConfig.profitThresholds.values())[0], //will be overwritten later
+			assetBalances: [],
 		});
 	}
 	return paths;

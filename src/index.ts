@@ -11,7 +11,7 @@ import { MempoolLoop } from "./core/types/arbitrageloops/mempoolLoop";
 import { SkipLoop } from "./core/types/arbitrageloops/skipLoop";
 import { setBotConfig } from "./core/types/base/botConfig";
 import { LogType } from "./core/types/base/logging";
-import { setPathFees } from "./core/types/base/path";
+import { setPathAssetOrder, setPathFees } from "./core/types/base/path";
 import { removedUnusedPools } from "./core/types/base/pool";
 // load env files
 dotenv.config();
@@ -83,6 +83,7 @@ Total Paths:** \t${paths.length}\n`;
 	setupMessage += "---".repeat(30);
 
 	setPathFees(paths, botConfig);
+	setPathAssetOrder(paths, botConfig);
 	startupMessage += setupMessage;
 	await logger.sendMessage(startupMessage, LogType.Console);
 
@@ -131,7 +132,7 @@ Total Paths:** \t${paths.length}\n`;
 	await logger.sendMessage("Starting loop...", LogType.All);
 	while (true) {
 		await loop.step();
-		loop.reset();
+		await loop.reset();
 		if (startupTime - Date.now() + botConfig.signOfLife * 60000 <= 0) {
 			timeIt++;
 			const mins = (botConfig.signOfLife * timeIt) % 60;

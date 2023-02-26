@@ -54,9 +54,9 @@ export type SwapOperationsMessage = {
 	execute_swap_operations: SwapOperationsInnerMessage;
 };
 export type SwapOperationsInnerMessage = {
-	max_spread: string;
-	minimum_receive: string;
-	offer_amount: string;
+	max_spread?: string;
+	minimum_receive?: string;
+	offer_amount?: string;
 	operations: SwapOperationsInnerMessageOperations;
 };
 

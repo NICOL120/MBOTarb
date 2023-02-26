@@ -1,12 +1,22 @@
 version: '3.9'
 
 services:
-  bot:
+  bot-juno:
     build: .
-    image: white-whale-bot
-    container_name: white-whale-bot
+    image: white-whale-bot-juno
+    container_name: white-whale-bot-juno
     env_file:
-      - .env
+      - juno.env
+    restart: always
+    stdin_open: true
+    tty: true
+
+  bot-terra:
+    build: .
+    image: white-whale-bot-terra
+    container_name: white-whale-bot-terra
+    env_file:
+      - terra.env
     restart: always
     stdin_open: true
     tty: true

@@ -2,13 +2,14 @@ import { AccountData } from "@cosmjs/amino";
 import { EncodeObject } from "@cosmjs/proto-signing";
 import { createJsonRpcRequest } from "@cosmjs/tendermint-rpc/build/jsonrpc";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
+import { MsgExecuteContract } from "cosmjs-types/cosmwasm/wasm/v1/tx";
 
 import { OptimalTrade } from "../../arbitrage/arbitrage";
 import { Logger } from "../../logging";
 import { BotClients } from "../../node/chainoperator";
 import { BotConfig } from "../base/botConfig";
 import { LogType } from "../base/logging";
-import { flushTxMemory, Mempool, MempoolTrade, processMempool } from "../base/mempool";
+import { flushTxMemory, Mempool, processMempool } from "../base/mempool";
 import { Path } from "../base/path";
 import { applyMempoolTradesOnPools, Pool } from "../base/pool";
 
@@ -108,11 +109,14 @@ export class MempoolLoop {
 				this.totalBytes = +this.mempool.total_bytes;
 			}
 
-			const mempoolTrades: Array<MempoolTrade> = processMempool(this.mempool);
+			const mempoolTrades: Array<[MsgExecuteContract, Uint8Array]> = processMempool(this.mempool);
 			if (mempoolTrades.length === 0) {
 				continue;
 			} else {
-				applyMempoolTradesOnPools(this.pools, mempoolTrades);
+				applyMempoolTradesOnPools(
+					this.pools,
+					mempoolTrades.map((trade) => trade[0]),
+				);
 			}
 
 			const arbTrade = this.arbitrageFunction(this.paths, this.botConfig);
@@ -128,13 +132,14 @@ export class MempoolLoop {
 	/**
 	 *
 	 */
-	public reset() {
+	public async reset() {
 		// reset all paths that are on cooldown
 		this.paths.forEach((path) => {
 			path.cooldown = false;
 		});
 		this.totalBytes = 0;
 		flushTxMemory();
+		await this.fetchRequiredChainData();
 	}
 
 	/**

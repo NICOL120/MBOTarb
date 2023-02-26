@@ -7,6 +7,7 @@ export interface OptimalTrade {
 	offerAsset: Asset;
 	profit: number;
 	path: Path;
+	skipBid: number | undefined;
 }
 /**
  *

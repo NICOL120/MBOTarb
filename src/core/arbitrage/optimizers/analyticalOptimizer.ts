@@ -1,7 +1,7 @@
-import { Asset, AssetInfo } from "../../types/base/asset";
+import { Asset } from "../../types/base/asset";
 import { BotConfig } from "../../types/base/botConfig";
 import { Path } from "../../types/base/path";
-import { getAssetsOrder, outGivenIn } from "../../types/base/pool";
+import { outGivenIn } from "../../types/base/pool";
 import { OptimalTrade } from "../arbitrage";
 
 /** Function to calculate the optimal path, tradesize and profit given an Array of paths and a starting asset.
@@ -10,18 +10,18 @@ import { OptimalTrade } from "../arbitrage";
  */
 export function getOptimalTrade(paths: Array<Path>, botConfig: BotConfig): OptimalTrade | undefined {
 	let maxTradesize = 0;
-	let maxActualProfit = 0;
-	let maxRawProfit = 0;
+	let maxNetProfit = 0;
 	let maxPath;
+	let maxSkipBid;
 
 	paths.map((path: Path) => {
 		if (!path.cooldown) {
-			const [tradesize, rawProfit, actualProfit] = getOptimalTradeForPath(path, botConfig);
-			if (actualProfit > maxActualProfit && tradesize > 0) {
-				maxActualProfit = actualProfit;
-				maxRawProfit = rawProfit;
+			const [tradesize, netProfit, skipBid] = getOptimalTradeForPath(path, botConfig);
+			if (netProfit > maxNetProfit && tradesize > 0) {
+				maxNetProfit = netProfit;
 				maxTradesize = tradesize;
 				maxPath = path;
+				maxSkipBid = skipBid;
 			}
 		}
 	});
@@ -29,7 +29,8 @@ export function getOptimalTrade(paths: Array<Path>, botConfig: BotConfig): Optim
 		return {
 			path: maxPath,
 			offerAsset: { amount: String(maxTradesize), info: botConfig.offerAssetInfo },
-			profit: maxRawProfit,
+			profit: maxNetProfit,
+			skipBid: maxSkipBid,
 		};
 	} else {
 		return undefined;
@@ -43,27 +44,17 @@ export function getOptimalTrade(paths: Array<Path>, botConfig: BotConfig): Optim
 	@param offerAssetInfo OfferAsset type `AssetInfo` from which the arbitrage path starts. 
     @returns [optimal tradesize, expected profit] for this particular path.
  */
-export function getOptimalTradeForPath(path: Path, botConfig: BotConfig): [number, number, number] {
-	const assetBalances = [];
-	let offerAssetNext: AssetInfo = botConfig.offerAssetInfo;
-	for (let i = 0; i < path.pools.length; i++) {
-		const assets = getAssetsOrder(path.pools[i], offerAssetNext);
-		if (assets) {
-			offerAssetNext = assets[1].info;
-			assetBalances.push([+assets[0].amount, +assets[1].amount]);
-		}
-	}
-
+export function getOptimalTradeForPath(path: Path, botConfig: BotConfig): [number, number, number | undefined] {
 	// # Set the aprime_in and aprime_out to the first pool in the route
-	let [aprime_in, aprime_out] = assetBalances[0];
+	let [aprime_in, aprime_out] = path.assetBalances[0].map((asset) => +asset.amount);
 
 	// # Set the r1_first and r2_first to the first pool in the route
 	const [r1_first, r2_first] = [1 - path.pools[0].inputfee / 100, 1 - path.pools[0].outputfee / 100];
 
 	// # Iterate through the route
-	for (let i = 1; i < assetBalances.length; i++) {
+	for (let i = 1; i < path.assetBalances.length; i++) {
 		// # Set the a_in and a_out to the current pool in the route
-		const [a_in, a_out] = assetBalances[i];
+		const [a_in, a_out] = path.assetBalances[i].map((asset) => +asset.amount);
 		// # Set the r1 and r2 to the current pool in the route
 		const [r1, r2] = [1 - path.pools[i].inputfee / 100, 1 - path.pools[i].outputfee / 100];
 		// # Calculate the aprime_in
@@ -80,16 +71,21 @@ export function getOptimalTradeForPath(path: Path, botConfig: BotConfig): [numbe
 		currentOfferAsset = { amount: String(outAmount), info: outInfo };
 	}
 	const rawProfit = +currentOfferAsset.amount - delta_a;
-	let actualProfit;
-	if (botConfig.skipConfig) {
-		const skipBidRate = botConfig.skipConfig.skipBidRate;
-		//Rawprofit - skipbid*Rawprofit - flashloanfee*tradesize - profitThreshold(including fees)
-		actualProfit =
-			rawProfit - (1 - skipBidRate) * rawProfit - (botConfig.flashloanFee / 100) * delta_a - path.profitThreshold;
+	let netProfit;
+	if (rawProfit < 0) {
+		netProfit = rawProfit;
 	} else {
-		actualProfit = rawProfit - (botConfig.flashloanFee / 100) * delta_a - path.profitThreshold;
+		if (botConfig.skipConfig) {
+			const skipBidRate = botConfig.skipConfig.skipBidRate;
+			//Rawprofit - skipbid*Rawprofit - flashloanfee*tradesize - profitThreshold(including fees)
+			const skipBid = Math.ceil((1 - skipBidRate) * rawProfit);
+			netProfit = rawProfit - skipBid - (botConfig.flashloanFee / 100) * delta_a - path.profitThreshold;
+			return [delta_a, Math.floor(netProfit), skipBid];
+		} else {
+			netProfit = rawProfit - (botConfig.flashloanFee / 100) * delta_a - path.profitThreshold;
+		}
 	}
+	return [delta_a, Math.floor(netProfit), undefined];
 
 	// # Return the floor of delta_a and the actual profit excluding a potential skip bid, this bid will be recalculated later
-	return [delta_a, Math.floor(rawProfit), Math.floor(actualProfit)];
 }

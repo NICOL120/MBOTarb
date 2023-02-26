@@ -7,6 +7,7 @@ import { SkipBundleClient } from "@skip-mev/skipjs";
 import { WebClient } from "@slack/web-api";
 import { MsgSend } from "cosmjs-types/cosmos/bank/v1beta1/tx";
 import { TxRaw } from "cosmjs-types/cosmos/tx/v1beta1/tx";
+import { MsgExecuteContract } from "cosmjs-types/cosmwasm/wasm/v1/tx";
 
 import { OptimalTrade } from "../../arbitrage/arbitrage";
 import { Logger } from "../../logging";
@@ -14,7 +15,7 @@ import { BotClients } from "../../node/chainoperator";
 import { SkipResult } from "../../node/skipclients";
 import { BotConfig } from "../base/botConfig";
 import { LogType } from "../base/logging";
-import { MempoolTrade, processMempool } from "../base/mempool";
+import { processMempool } from "../base/mempool";
 import { Path } from "../base/path";
 import { applyMempoolTradesOnPools, Pool } from "../base/pool";
 import { MempoolLoop } from "./mempoolLoop";
@@ -58,6 +59,14 @@ export class SkipLoop extends MempoolLoop {
 	public async step(): Promise<void> {
 		this.iterations++;
 		this.updateStateFunction(this.botClients, this.pools);
+		const arbTrade: OptimalTrade | undefined = this.arbitrageFunction(this.paths, this.botConfig);
+
+		if (arbTrade) {
+			console.log("state arb");
+			arbTrade.path.pools.map((pool) => console.log(pool.address));
+			arbTrade.path.cooldown = true;
+			await this.skipTrade(arbTrade);
+		}
 		while (true) {
 			const mempoolResult = await this.botClients.HttpClient.execute(createJsonRpcRequest("unconfirmed_txs"));
 			this.mempool = mempoolResult.result;
@@ -70,16 +79,17 @@ export class SkipLoop extends MempoolLoop {
 				this.totalBytes = +this.mempool.total_bytes;
 			}
 
-			const mempoolTrades: Array<MempoolTrade> = processMempool(this.mempool);
+			const mempoolTrades: Array<[MsgExecuteContract, Uint8Array]> = processMempool(this.mempool);
 			if (mempoolTrades.length === 0) {
 				continue;
 			} else {
 				for (const trade of mempoolTrades) {
-					applyMempoolTradesOnPools(this.pools, [trade]);
+					applyMempoolTradesOnPools(this.pools, [trade[0]]);
 					const arbTrade: OptimalTrade | undefined = this.arbitrageFunction(this.paths, this.botConfig);
 					if (arbTrade) {
-						await this.skipTrade(arbTrade, trade);
+						console.log("mev arb", arbTrade);
 						arbTrade.path.cooldown = true; //set the cooldown of this path to true so we dont trade it again in next callbacks
+						await this.skipTrade(arbTrade, trade[1]);
 					}
 				}
 			}
@@ -89,16 +99,13 @@ export class SkipLoop extends MempoolLoop {
 	/**
 	 *
 	 */
-	private async skipTrade(arbTrade: OptimalTrade, toArbTrade: MempoolTrade) {
-		if (arbTrade.path.cooldown) {
-			// dont execute if path is on cooldown
-			return;
-		}
+	private async skipTrade(arbTrade: OptimalTrade, toArbTradeBytes?: Uint8Array) {
 		if (
 			!this.botConfig.skipConfig?.useSkip ||
 			this.botConfig.skipConfig?.skipRpcUrl === undefined ||
 			this.botConfig.skipConfig?.skipBidRate === undefined ||
-			this.botConfig.skipConfig?.skipBidWallet === undefined
+			this.botConfig.skipConfig?.skipBidWallet === undefined ||
+			arbTrade.skipBid === undefined
 		) {
 			await this.logger?.sendMessage(
 				"Please setup skip variables in the config environment file",
@@ -106,13 +113,14 @@ export class SkipLoop extends MempoolLoop {
 			);
 			return;
 		}
+
 		const bidMsg: MsgSend = MsgSend.fromJSON({
 			fromAddress: this.account.address,
 			toAddress: this.botConfig.skipConfig.skipBidWallet,
 			amount: [
 				{
 					denom: this.botConfig.offerAssetInfo.native_token.denom,
-					amount: String(Math.max(Math.round(arbTrade.profit * this.botConfig.skipConfig.skipBidRate), 651)),
+					amount: String(Math.max(arbTrade.skipBid, 651)),
 				},
 			],
 		});
@@ -136,14 +144,15 @@ export class SkipLoop extends MempoolLoop {
 			"",
 			signerData,
 		);
-		// const txBytes = TxRaw.encode(txRaw).finish();
-		// const normalResult = await this.botClients.TMClient.broadcastTxSync({ tx: txBytes });
-		// console.log(normalResult);
-		const txToArbRaw: TxRaw = TxRaw.decode(toArbTrade.txBytes);
-		const signed = await this.skipClient.signBundle([txToArbRaw, txRaw], this.skipSigner, this.account.address);
-
-		const res = <SkipResult>await this.skipClient.sendBundle(signed, 0, true);
-
+		let res: SkipResult;
+		if (toArbTradeBytes) {
+			const txToArbRaw: TxRaw = TxRaw.decode(toArbTradeBytes);
+			const signed = await this.skipClient.signBundle([txToArbRaw, txRaw], this.skipSigner, this.account.address);
+			res = <SkipResult>await this.skipClient.sendBundle(signed, 0, true);
+		} else {
+			const signed = await this.skipClient.signBundle([txRaw], this.skipSigner, this.account.address);
+			res = <SkipResult>await this.skipClient.sendBundle(signed, 0, true);
+		}
 		let logItem = "";
 		let logMessage = `**wallet:** ${this.account.address}\t **block:** ${res.result.desired_height}\t **profit:** ${arbTrade.profit}`;
 
@@ -180,8 +189,6 @@ export class SkipLoop extends MempoolLoop {
 
 		if (res.result.code === 0) {
 			this.sequence += 1;
-		} else {
-			await this.fetchRequiredChainData();
 		}
 		await delay(5000);
 	}
