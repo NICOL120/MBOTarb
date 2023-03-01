@@ -15,7 +15,7 @@ export function getOptimalTrade(paths: Array<Path>, botConfig: BotConfig): Optim
 	let maxSkipBid;
 
 	paths.map((path: Path) => {
-		if (!path.cooldown) {
+		if (path.cooldown === 0) {
 			const [tradesize, netProfit, skipBid] = getOptimalTradeForPath(path, botConfig);
 			if (netProfit > maxNetProfit && tradesize > 0) {
 				maxNetProfit = netProfit;
@@ -23,6 +23,8 @@ export function getOptimalTrade(paths: Array<Path>, botConfig: BotConfig): Optim
 				maxPath = path;
 				maxSkipBid = skipBid;
 			}
+		} else {
+			console.log("skipping path because its on cooldown: ", path.cooldown);
 		}
 	});
 	if (maxPath) {
@@ -64,7 +66,9 @@ export function getOptimalTradeForPath(path: Path, botConfig: BotConfig): [numbe
 	}
 	// # Calculate the delta_a
 	const delta_a = Math.floor((Math.sqrt(r1_first * r2_first * aprime_in * aprime_out) - aprime_in) / r1_first);
-
+	if (delta_a < 0) {
+		return [delta_a, delta_a, undefined]; //we dont want to receive negative tradesizes
+	}
 	let currentOfferAsset: Asset = { amount: String(delta_a), info: botConfig.offerAssetInfo };
 	for (let i = 0; i < path.pools.length; i++) {
 		const [outAmount, outInfo] = outGivenIn(path.pools[i], currentOfferAsset);
@@ -73,7 +77,7 @@ export function getOptimalTradeForPath(path: Path, botConfig: BotConfig): [numbe
 	const rawProfit = +currentOfferAsset.amount - delta_a;
 	let netProfit;
 	if (rawProfit < 0) {
-		netProfit = rawProfit;
+		return [delta_a, rawProfit, undefined];
 	} else {
 		if (botConfig.skipConfig) {
 			const skipBidRate = botConfig.skipConfig.skipBidRate;

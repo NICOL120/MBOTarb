@@ -7,7 +7,7 @@ import { getAssetsOrder, Pool } from "./pool";
 
 export interface Path {
 	pools: Array<Pool>;
-	cooldown: boolean;
+	cooldown: number;
 	txFee: StdFee;
 	profitThreshold: number;
 	assetBalances: Array<Array<Asset>>;

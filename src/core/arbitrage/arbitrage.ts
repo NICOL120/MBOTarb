@@ -16,7 +16,12 @@ export function trySomeArb(paths: Array<Path>, botConfig: BotConfig): OptimalTra
 	const optimalTrade: OptimalTrade | undefined = getOptimalTrade(paths, botConfig);
 	if (optimalTrade) {
 		console.log("optimal trade");
-		console.log(optimalTrade.offerAsset, optimalTrade.path.profitThreshold, optimalTrade.profit);
+		console.log(
+			optimalTrade.offerAsset,
+			optimalTrade.path.profitThreshold,
+			optimalTrade.profit,
+			optimalTrade.path.cooldown,
+		);
 	}
 	return optimalTrade;
 }
