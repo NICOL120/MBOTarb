@@ -135,6 +135,14 @@ export class SkipLoop extends MempoolLoop {
 			chainId: this.chainid,
 		};
 		const [msgs, _] = this.messageFunction(arbTrade, this.account.address, this.botConfig.flashloanRouterAddress);
+		const txRawNoSkip: TxRaw = await this.botClients.SigningCWClient.sign(
+			this.account.address,
+			msgs,
+			arbTrade.path.txFee,
+			"",
+			signerData,
+		);
+
 		msgs.push(bidMsgEncodedObject);
 
 		const txRaw: TxRaw = await this.botClients.SigningCWClient.sign(
@@ -144,6 +152,9 @@ export class SkipLoop extends MempoolLoop {
 			"",
 			signerData,
 		);
+		const txBytesNoSkip = TxRaw.encode(txRawNoSkip).finish();
+		const sendResult = await this.botClients.TMClient.broadcastTxSync({ tx: txBytesNoSkip });
+		console.log(sendResult);
 		let res: SkipResult;
 		if (toArbTradeBytes) {
 			const txToArbRaw: TxRaw = TxRaw.decode(toArbTradeBytes);

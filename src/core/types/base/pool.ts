@@ -126,115 +126,121 @@ function applyTradeOnPool(pool: Pool, offer_asset: Asset) {
  */
 export function applyMempoolTradesOnPools(pools: Array<Pool>, mempoolTrades: Array<MsgExecuteContract>) {
 	for (const msgExecuteContract of mempoolTrades) {
-		let tradeMessage = JSON.parse(fromUtf8(msgExecuteContract.msg));
-		const tradeMessageType = detectTradeMessageType(tradeMessage);
-		if (tradeMessageType === TradeMessageType.Unknown) {
-			continue;
-		}
-		switch (tradeMessageType) {
-			case TradeMessageType.DefaultSwapMessage: {
-				tradeMessage = identity<DefaultSwapMessage>(tradeMessage);
-				const poolToUpdate = pools.find((pool) => msgExecuteContract.contract === pool.address);
-				if (!poolToUpdate) {
-					continue;
-				}
-				const offerAsset = tradeMessage.swap.offer_asset;
-				//TODO: create types for assets
-				if (isWyndDaoNativeAsset(offerAsset.info)) {
-					offerAsset.info = { native_token: { denom: offerAsset.info.native } };
-				}
-				if (isWyndDaoTokenAsset(offerAsset.info)) {
-					offerAsset.info = { token: { contract_addr: offerAsset.info.token } };
-				}
+		try {
+			let tradeMessage = JSON.parse(fromUtf8(msgExecuteContract.msg));
+			const tradeMessageType = detectTradeMessageType(tradeMessage);
+			if (tradeMessageType === TradeMessageType.Unknown) {
+				continue;
+			}
+			switch (tradeMessageType) {
+				case TradeMessageType.DefaultSwapMessage: {
+					tradeMessage = identity<DefaultSwapMessage>(tradeMessage);
+					const poolToUpdate = pools.find((pool) => msgExecuteContract.contract === pool.address);
+					if (!poolToUpdate) {
+						continue;
+					}
+					const offerAsset = tradeMessage.swap.offer_asset;
+					//TODO: create types for assets
+					if (isWyndDaoNativeAsset(offerAsset.info)) {
+						offerAsset.info = { native_token: { denom: offerAsset.info.native } };
+					}
+					if (isWyndDaoTokenAsset(offerAsset.info)) {
+						offerAsset.info = { token: { contract_addr: offerAsset.info.token } };
+					}
 
-				applyTradeOnPool(poolToUpdate, offerAsset);
-				break;
-			}
-			case TradeMessageType.JunoSwapMessage: {
-				tradeMessage = identity<JunoSwapMessage>(tradeMessage);
-				const poolToUpdate = pools.find((pool) => msgExecuteContract.contract === pool.address);
-				if (!poolToUpdate) {
-					continue;
-				}
-				const offerAsset: Asset = {
-					amount: tradeMessage.swap.input_amount,
-					info:
-						tradeMessage.swap.input_token === "Token1"
-							? poolToUpdate.assets[0].info
-							: poolToUpdate.assets[1].info,
-				};
-				applyTradeOnPool(poolToUpdate, offerAsset);
-				break;
-			}
-			case TradeMessageType.SendMessage: {
-				const innerTradeMessage = JSON.parse(fromAscii(fromBase64(tradeMessage.send.msg)));
-				const innerTradeMessageType = detectTradeMessageType(innerTradeMessage);
-				switch (innerTradeMessageType) {
-					case TradeMessageType.SwapMessage: {
-						const poolToUpdate = pools.find((pool) => tradeMessage.send.contract === pool.address);
-						if (!poolToUpdate) {
-							continue;
-						}
-						const offerAsset: Asset = {
-							amount: tradeMessage.send.amount,
-							info: { token: { contract_addr: msgExecuteContract.contract } },
-						};
-						applyTradeOnPool(poolToUpdate, offerAsset);
-						break;
-					}
-					case TradeMessageType.SwapOperationsMessage:
-						applySwapOperationsMessage(pools, undefined, msgExecuteContract);
-						break;
-				}
-				break;
-			}
-			case TradeMessageType.TFMSwapOperationsMessage: {
-				tradeMessage = identity<TFMSwapOperationsMessage>(tradeMessage);
-				let offerAsset = {
-					amount: tradeMessage.execute_swap_operations.offer_amount,
-					info: tradeMessage.execute_swap_operations.routes[0].operations[0].t_f_m_swap.offer_asset_info,
-				};
-				for (const operation of tradeMessage.execute_swap_operations.routes[0].operations) {
-					const currentPool = pools.find((pool) => pool.address === operation.t_f_m_swap.pair_contract);
-					if (currentPool) {
-						const [outGivenInNext, _] = outGivenIn(currentPool, offerAsset);
-						applyTradeOnPool(currentPool, offerAsset);
-						offerAsset = { amount: String(outGivenInNext), info: operation.ask_asset_info };
-					}
-				}
-				break;
-			}
-			case TradeMessageType.JunoSwapOperationsMessage: {
-				const poolToUpdate = pools.find((pool) => msgExecuteContract.contract === pool.address);
-				if (!poolToUpdate) {
+					applyTradeOnPool(poolToUpdate, offerAsset);
 					break;
 				}
-				tradeMessage = identity<JunoSwapOperationsMessage>(tradeMessage);
-				const offerAsset: Asset = {
-					amount: tradeMessage.pass_through_swap.input_token_amount,
-					info:
-						tradeMessage.pass_through_swap.input_token === "Token1"
-							? poolToUpdate.assets[0].info
-							: poolToUpdate.assets[1].info,
-				};
-				applyTradeOnPool(poolToUpdate, offerAsset);
-
-				// Second swap
-				const [outGivenIn0, nextOfferAssetInfo] = outGivenIn(poolToUpdate, offerAsset);
-				const secondPoolToUpdate = pools.find(
-					(pool) => pool.address === tradeMessage.pass_through_swap.output_amm_address,
-				);
-
-				if (secondPoolToUpdate !== undefined) {
-					applyTradeOnPool(secondPoolToUpdate, { amount: String(outGivenIn0), info: nextOfferAssetInfo });
+				case TradeMessageType.JunoSwapMessage: {
+					tradeMessage = identity<JunoSwapMessage>(tradeMessage);
+					const poolToUpdate = pools.find((pool) => msgExecuteContract.contract === pool.address);
+					if (!poolToUpdate) {
+						continue;
+					}
+					const offerAsset: Asset = {
+						amount: tradeMessage.swap.input_amount,
+						info:
+							tradeMessage.swap.input_token === "Token1"
+								? poolToUpdate.assets[0].info
+								: poolToUpdate.assets[1].info,
+					};
+					applyTradeOnPool(poolToUpdate, offerAsset);
+					break;
 				}
-				break;
+				case TradeMessageType.SendMessage: {
+					const innerTradeMessage = JSON.parse(fromAscii(fromBase64(tradeMessage.send.msg)));
+					const innerTradeMessageType = detectTradeMessageType(innerTradeMessage);
+					switch (innerTradeMessageType) {
+						case TradeMessageType.SwapMessage: {
+							const poolToUpdate = pools.find((pool) => tradeMessage.send.contract === pool.address);
+							if (!poolToUpdate) {
+								continue;
+							}
+							const offerAsset: Asset = {
+								amount: tradeMessage.send.amount,
+								info: { token: { contract_addr: msgExecuteContract.contract } },
+							};
+							applyTradeOnPool(poolToUpdate, offerAsset);
+							break;
+						}
+						case TradeMessageType.SwapOperationsMessage:
+							applySwapOperationsMessage(pools, undefined, msgExecuteContract);
+							break;
+					}
+					break;
+				}
+				case TradeMessageType.TFMSwapOperationsMessage: {
+					tradeMessage = identity<TFMSwapOperationsMessage>(tradeMessage);
+					let offerAsset = {
+						amount: tradeMessage.execute_swap_operations.offer_amount,
+						info: tradeMessage.execute_swap_operations.routes[0].operations[0].t_f_m_swap.offer_asset_info,
+					};
+					for (const operation of tradeMessage.execute_swap_operations.routes[0].operations) {
+						const currentPool = pools.find((pool) => pool.address === operation.t_f_m_swap.pair_contract);
+						if (currentPool) {
+							const [outGivenInNext, _] = outGivenIn(currentPool, offerAsset);
+							applyTradeOnPool(currentPool, offerAsset);
+							offerAsset = { amount: String(outGivenInNext), info: operation.ask_asset_info };
+						}
+					}
+					break;
+				}
+				case TradeMessageType.JunoSwapOperationsMessage: {
+					const poolToUpdate = pools.find((pool) => msgExecuteContract.contract === pool.address);
+					if (!poolToUpdate) {
+						break;
+					}
+					tradeMessage = identity<JunoSwapOperationsMessage>(tradeMessage);
+					const offerAsset: Asset = {
+						amount: tradeMessage.pass_through_swap.input_token_amount,
+						info:
+							tradeMessage.pass_through_swap.input_token === "Token1"
+								? poolToUpdate.assets[0].info
+								: poolToUpdate.assets[1].info,
+					};
+					applyTradeOnPool(poolToUpdate, offerAsset);
+
+					// Second swap
+					const [outGivenIn0, nextOfferAssetInfo] = outGivenIn(poolToUpdate, offerAsset);
+					const secondPoolToUpdate = pools.find(
+						(pool) => pool.address === tradeMessage.pass_through_swap.output_amm_address,
+					);
+
+					if (secondPoolToUpdate !== undefined) {
+						applyTradeOnPool(secondPoolToUpdate, { amount: String(outGivenIn0), info: nextOfferAssetInfo });
+					}
+					break;
+				}
+				case TradeMessageType.SwapOperationsMessage: {
+					tradeMessage = identity<SwapOperationsMessage>(tradeMessage);
+					applySwapOperationsMessage(pools, msgExecuteContract, undefined);
+					break;
+				}
 			}
-			case TradeMessageType.SwapOperationsMessage: {
-				tradeMessage = identity<SwapOperationsMessage>(tradeMessage);
-				applySwapOperationsMessage(pools, msgExecuteContract, undefined);
-				break;
-			}
+		} catch (e) {
+			console.log("cannot apply transaction:");
+			console.log(msgExecuteContract.contract, fromUtf8(msgExecuteContract.msg));
+			console.log(e);
 		}
 	}
 }
