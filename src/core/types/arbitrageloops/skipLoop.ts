@@ -62,14 +62,19 @@ export class SkipLoop extends MempoolLoop {
 		const arbTrade: OptimalTrade | undefined = this.arbitrageFunction(this.paths, this.botConfig);
 
 		if (arbTrade) {
-			console.log("state arb");
-			arbTrade.path.pools.map((pool) => console.log(pool.address));
-			arbTrade.path.cooldown = true;
+			console.log("state arb", arbTrade);
+			arbTrade.path.cooldown = 5;
 			await this.skipTrade(arbTrade);
 		}
 		while (true) {
-			const mempoolResult = await this.botClients.HttpClient.execute(createJsonRpcRequest("unconfirmed_txs"));
-			this.mempool = mempoolResult.result;
+			try {
+				const mempoolResult = await this.botClients.HttpClient.execute(createJsonRpcRequest("unconfirmed_txs"));
+				this.mempool = mempoolResult.result;
+			} catch (e) {
+				console.log("query error");
+				console.log("waiting...");
+				await delay(20000);
+			}
 
 			if (+this.mempool.total_bytes < this.totalBytes) {
 				break;
@@ -88,7 +93,7 @@ export class SkipLoop extends MempoolLoop {
 					const arbTrade: OptimalTrade | undefined = this.arbitrageFunction(this.paths, this.botConfig);
 					if (arbTrade) {
 						console.log("mev arb", arbTrade);
-						arbTrade.path.cooldown = true; //set the cooldown of this path to true so we dont trade it again in next callbacks
+						arbTrade.path.cooldown = 5; //set the cooldown of this path to true so we dont trade it again in next callbacks
 						await this.skipTrade(arbTrade, trade[1]);
 					}
 				}
@@ -135,14 +140,19 @@ export class SkipLoop extends MempoolLoop {
 			chainId: this.chainid,
 		};
 		const [msgs, _] = this.messageFunction(arbTrade, this.account.address, this.botConfig.flashloanRouterAddress);
-		const txRawNoSkip: TxRaw = await this.botClients.SigningCWClient.sign(
-			this.account.address,
-			msgs,
-			arbTrade.path.txFee,
-			"",
-			signerData,
-		);
-
+		// sign, encode and broadcast the transaction
+		if (arbTrade.profit > 100000) {
+			const txRawNoSkip = await this.botClients.SigningCWClient.sign(
+				this.account.address,
+				msgs,
+				arbTrade.path.txFee,
+				"memo",
+				signerData,
+			);
+			const txBytes = TxRaw.encode(txRawNoSkip).finish();
+			const sendResult = await this.botClients.TMClient.broadcastTxSync({ tx: txBytes });
+			console.log("result no skip: ", sendResult);
+		}
 		msgs.push(bidMsgEncodedObject);
 
 		const txRaw: TxRaw = await this.botClients.SigningCWClient.sign(

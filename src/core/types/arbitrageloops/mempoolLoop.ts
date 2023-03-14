@@ -122,8 +122,9 @@ export class MempoolLoop {
 			const arbTrade = this.arbitrageFunction(this.paths, this.botConfig);
 
 			if (arbTrade) {
+				arbTrade.path.cooldown = 5;
 				await this.trade(arbTrade);
-				arbTrade.path.cooldown = true;
+
 				break;
 			}
 		}
@@ -135,7 +136,9 @@ export class MempoolLoop {
 	public async reset() {
 		// reset all paths that are on cooldown
 		this.paths.forEach((path) => {
-			path.cooldown = false;
+			if (path.cooldown > 0) {
+				path.cooldown = path.cooldown - 1;
+			}
 		});
 		this.totalBytes = 0;
 		flushTxMemory();

@@ -89,7 +89,7 @@ export function getPaths(graph: Graph, botConfig: BotConfig, depth: number): Arr
 		}
 		paths.push({
 			pools: poolList,
-			cooldown: false,
+			cooldown: 0,
 			txFee: Array.from(botConfig.txFees.values())[0], //will be overwritten later
 			profitThreshold: Array.from(botConfig.profitThresholds.values())[0], //will be overwritten later
 			assetBalances: [],

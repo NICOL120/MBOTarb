@@ -238,8 +238,8 @@ export function applyMempoolTradesOnPools(pools: Array<Pool>, mempoolTrades: Arr
 				}
 			}
 		} catch (e) {
-			console.log("cannot apply transaction:");
-			console.log(msgExecuteContract.contract, fromUtf8(msgExecuteContract.msg));
+			console.log("cannot decode mempool transaction: ");
+			console.log(fromUtf8(msgExecuteContract.msg));
 			console.log(e);
 		}
 	}
