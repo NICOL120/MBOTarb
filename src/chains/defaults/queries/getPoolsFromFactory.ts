@@ -1,12 +1,11 @@
-
 import { BotClients } from "../../../core/node/chainoperator";
 import { AssetInfo } from "../../../core/types/base/asset";
-
 
 interface FactoryStatePair {
 	asset_infos: Array<AssetInfo>;
 	contract_addr: string;
 	liquidity_token: string;
+	pair_type: Record<string, never>;
 }
 interface FactoryState {
 	pairs: Array<FactoryStatePair>;
@@ -27,11 +26,17 @@ export async function getPoolsFromFactory(
 			});
 
 			res.pairs.map((factorypair) => {
-				factorypairs.push({
-					pool: factorypair.contract_addr,
-					factory: factorymap.factory,
-					router: factorymap.router,
-				});
+				if (factorypair.pair_type?.stable !== undefined) {
+					console.log("removing stable: ", factorypair);
+					return;
+					//
+				} else {
+					factorypairs.push({
+						pool: factorypair.contract_addr,
+						factory: factorymap.factory,
+						router: factorymap.router,
+					});
+				}
 			});
 
 			while (res.pairs.length == 30) {
@@ -41,11 +46,17 @@ export async function getPoolsFromFactory(
 				});
 
 				res.pairs.map((factorypair) => {
-					factorypairs.push({
-						pool: factorypair.contract_addr,
-						factory: factorymap.factory,
-						router: factorymap.router,
-					});
+					if (factorypair.pair_type?.stable !== undefined) {
+						console.log("removing stable: ", factorypair);
+						return;
+						//
+					} else {
+						factorypairs.push({
+							pool: factorypair.contract_addr,
+							factory: factorymap.factory,
+							router: factorymap.router,
+						});
+					}
 				});
 			}
 		}),

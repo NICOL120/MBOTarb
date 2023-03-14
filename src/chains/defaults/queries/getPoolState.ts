@@ -66,35 +66,59 @@ export async function initPools(
 ): Promise<Array<Pool>> {
 	const pools: Array<Pool> = [];
 	const factoryPools = await getPoolsFromFactory(botClients, factoryMapping);
-	for (const poolAddress of poolAddresses) {
+
+	const poolAddressesSet: Set<string> = new Set(poolAddresses.map((pa) => pa.pool));
+	factoryPools.map((fp) => {
+		poolAddressesSet.add(fp.pool);
+	});
+
+	for (const poolAddress of poolAddressesSet) {
 		let assets: Array<Asset> = [];
 		let dexname: AmmDexName;
 		let totalShare: string;
 		try {
 			const poolState = <PoolState>(
-				await botClients.WasmQueryClient.wasm.queryContractSmart(poolAddress.pool, { pool: {} })
+				await botClients.WasmQueryClient.wasm.queryContractSmart(poolAddress, { pool: {} })
 			);
 			[assets, dexname, totalShare] = processPoolStateAssets(poolState);
 		} catch (error) {
-			const poolState = <JunoSwapPoolState>(
-				await botClients.WasmQueryClient.wasm.queryContractSmart(poolAddress.pool, { info: {} })
-			);
-			[assets, dexname, totalShare] = processJunoswapPoolStateAssets(poolState);
+			try {
+				const poolState = <JunoSwapPoolState>(
+					await botClients.WasmQueryClient.wasm.queryContractSmart(poolAddress, { info: {} })
+				);
+				[assets, dexname, totalShare] = processJunoswapPoolStateAssets(poolState);
+			} catch (error) {
+				console.log("cannot query pool: ", poolAddress, " continuing...");
+				continue;
+			}
 		}
-		const factory = factoryPools.find((fp) => fp.pool == poolAddress.pool)?.factory ?? "";
-		const router = factoryPools.find((fp) => fp.pool == poolAddress.pool)?.router ?? "";
-		const [inputFee, outputFee, LPratio] = await getPoolFees(botClients, poolAddress.pool, dexname);
-		console.log(inputFee, outputFee, LPratio);
+		const factory = factoryPools.find((fp) => fp.pool == poolAddress)?.factory;
+		const router = factoryPools.find((fp) => fp.pool == poolAddress)?.router;
+
+		let inputFee, outputFee, LPratio;
+
+		const localOverwrite = poolAddresses.find((pa) => pa.pool === poolAddress);
+		if (localOverwrite) {
+			// we overwrite the queried fees, usually when not present/queryable
+
+			inputFee = localOverwrite.inputfee;
+			outputFee = localOverwrite.outputfee;
+			LPratio = localOverwrite.LPratio;
+			console.log("pool: ", poolAddress, " overwritten by user input: ", localOverwrite);
+		} else {
+			[inputFee, outputFee, LPratio] = await getPoolFees(botClients, poolAddress, dexname, factory);
+		}
+		console.log(dexname, poolAddress, inputFee, outputFee, LPratio);
 		pools.push({
 			assets: assets,
 			totalShare: totalShare,
-			address: poolAddress.pool,
+			address: poolAddress,
 			dexname: dexname,
-			inputfee: poolAddress.inputfee,
-			outputfee: poolAddress.outputfee,
-			LPratio: poolAddress.LPratio,
-			factoryAddress: factory,
-			routerAddress: router,
+			inputfee: inputFee,
+			outputfee: outputFee,
+			LPratio: LPratio,
+			factoryAddress: factory ?? "",
+			routerAddress: router ?? "",
 		});
 	}
 	return pools;

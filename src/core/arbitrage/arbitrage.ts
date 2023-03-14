@@ -12,8 +12,9 @@ export interface OptimalTrade {
  *
  */
 export function trySomeArb(paths: Array<Path>, botConfig: BotConfig): OptimalTrade | undefined {
+	console.time("arbtime");
 	const optimalTrade: OptimalTrade | undefined = getOptimalTrade(paths, botConfig.offerAssetInfo);
-
+	console.timeEnd("arbtime");
 	if (!optimalTrade) {
 		return undefined;
 	} else {

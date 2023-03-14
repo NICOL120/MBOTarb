@@ -74,7 +74,6 @@ export class MempoolLoop {
 		this.botConfig = botConfig;
 		this.logger = logger;
 		this.pathlib = pathlib;
-
 	}
 
 	/**
@@ -208,10 +207,13 @@ export class MempoolLoop {
 		this.paths = out;
 	}
 
-	/**
+	/**.
 	 *
 	 * Removes the CD Paths if CD iteration number of path + Cooldownblocks <= this.iterations
 	 * ADDS the path from pathlibary to this.paths.
+	 */
+	/**
+	 *
 	 */
 	public unCDPaths() {
 		this.CDpaths.forEach((value, key) => {
@@ -223,7 +225,6 @@ export class MempoolLoop {
 			}
 		});
 	}
-
 }
 
 /**

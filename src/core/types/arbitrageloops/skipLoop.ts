@@ -1,4 +1,6 @@
 import { AccountData } from "@cosmjs/amino";
+import { sha256 } from "@cosmjs/crypto";
+import { toHex } from "@cosmjs/encoding";
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { EncodeObject } from "@cosmjs/proto-signing";
 import { SignerData } from "@cosmjs/stargate";
@@ -60,6 +62,7 @@ export class SkipLoop extends MempoolLoop {
 	public async step(): Promise<void> {
 		this.iterations++;
 		this.updateStateFunction(this.botClients, this.pools);
+		console.log("paths on cooldown: ", this.CDpaths.size);
 		while (true) {
 			const mempoolResult = await this.botClients.HttpClient.execute(createJsonRpcRequest("unconfirmed_txs"));
 			this.mempool = mempoolResult.result;
@@ -81,6 +84,11 @@ export class SkipLoop extends MempoolLoop {
 					const arbTrade: OptimalTrade | undefined = this.arbitrageFunction(this.paths, this.botConfig);
 					if (arbTrade) {
 						await this.skipTrade(arbTrade, trade);
+						console.log("arbing: ", trade.message, "hash: ", toHex(sha256(trade.txBytes)));
+						console.log("arbPath:");
+						arbTrade.path.pools.map((pool) => {
+							console.log(pool.address);
+						});
 					}
 				}
 			}

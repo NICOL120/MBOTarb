@@ -13,7 +13,7 @@ import { setBotConfig } from "./core/types/base/botConfig";
 import { LogType } from "./core/types/base/logging";
 import { removedUnusedPools } from "./core/types/base/pool";
 // load env files
-dotenv.config();
+dotenv.config({ path: "terra.env" });
 const botConfig = setBotConfig(process.env);
 
 let startupMessage = "===".repeat(30);
@@ -67,6 +67,7 @@ Connections Details:\n
 	setupMessage += "---".repeat(30);
 
 	const allPools = await initPools(botClients, botConfig.poolEnvs, botConfig.mappingFactoryRouter);
+	setupMessage += `**\nFound ${allPools.length} Pools`;
 	const graph = newGraph(allPools);
 	const paths = getPaths(graph, botConfig.offerAssetInfo, botConfig.maxPathPools) ?? [];
 
@@ -105,7 +106,6 @@ Total Paths:** \t${paths.length}\n`;
 			skipSigner,
 			logger,
 			[...paths],
-
 		);
 	} else if (botConfig.useMempool === true) {
 		await logger.sendMessage("Initializing mempool loop...", LogType.Console);
@@ -121,7 +121,6 @@ Total Paths:** \t${paths.length}\n`;
 			botConfig,
 			logger,
 			[...paths],
-
 		);
 	} else {
 		await logger.sendMessage("**Info:** loop without mempool or skip not implemented yet");
