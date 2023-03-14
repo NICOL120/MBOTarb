@@ -8,6 +8,7 @@ import {
 } from "../../../core/types/base/asset";
 import { AmmDexName, Pool } from "../../../core/types/base/pool";
 import { Uint128 } from "../../../core/types/base/uint128";
+import { getPoolFees } from "./getPoolFees";
 import { getPoolsFromFactory } from "./getPoolsFromFactory";
 
 interface JunoSwapPoolState {
@@ -82,7 +83,8 @@ export async function initPools(
 		}
 		const factory = factoryPools.find((fp) => fp.pool == poolAddress.pool)?.factory ?? "";
 		const router = factoryPools.find((fp) => fp.pool == poolAddress.pool)?.router ?? "";
-
+		const [inputFee, outputFee, LPratio] = await getPoolFees(botClients, poolAddress.pool, dexname);
+		console.log(inputFee, outputFee, LPratio);
 		pools.push({
 			assets: assets,
 			totalShare: totalShare,
